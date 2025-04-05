@@ -5,7 +5,7 @@ This repository contains an implementation of Iterated Local Search (ILS) algori
 ## Algorithm Overview
 
 ### Iterated Local Search (ILS)
-The ILS implementation (`iterated_local_search` method) works as follows:
+The ILS implementation (`iterated_local_search` method) is based on Algorithm 16 "Iterated Local Search (ILS) with Random Restarts" from "Essentials of Metaheuristics" (Luke, 2014, p. 29). The implementation works as follows:
 
 1. **Initial Solution**: Generated using GRASP with a quick local search improvement
 2. **Main Loop**: Iterates until reaching time limit or maximum iterations
@@ -60,6 +60,7 @@ The perturbation mechanism (`perturb_solution` method) uses a destroy-and-rebuil
 1. **Destroy Phase**:
    - Randomly selects a subset of signed libraries (1 to 1/3 of total)
    - Removes these libraries from the solution
+   - Destroy size is randomly chosen between 1% and ~33.33% of signed libraries
 
 2. **Rebuild Phase**:
    - Calculates scores for unsigned libraries based on:
@@ -71,7 +72,7 @@ The perturbation mechanism (`perturb_solution` method) uses a destroy-and-rebuil
 
 ### Initial Solution Generation (GRASP)
 
-The initial solution is generated using a GRASP approach (`generate_initial_solution_grasp` method):
+The initial solution is generated using a GRASP approach (`generate_initial_solution_grasp` method) based on Algorithm 108 "Greedy Randomized Adaptive Search Procedures (GRASP)" from "Essentials of Metaheuristics" (Luke, 2014, p. 151). The implementation includes:
 
 1. **Construction Phase**:
    - Sorts libraries by signup days (ascending) and total score (descending)
@@ -88,7 +89,7 @@ The initial solution is generated using a GRASP approach (`generate_initial_solu
      - Book-level tweaks
 
 Parameters:
-- `p`: RCL size as percentage (default: 5%)
+- `p`: RCL size as percentage (default: 0.05)
 - `max_time`: Time limit for GRASP iterations (default: 60s)
 
 ## Usage
@@ -124,3 +125,9 @@ The algorithm maintains solution feasibility throughout all operations and uses 
 - Uses history-based acceptance criteria to escape local optima
 
 The implementation balances exploration (through perturbation and acceptance criteria) with exploitation (through local search and greedy components) to effectively search the solution space.
+
+## References
+
+Luke, S. (2014). Essentials of Metaheuristics (2nd ed., Version 2.1). George Mason University. Retrieved from https://cs.gmu.edu/~sean/book/metaheuristics/
+- Algorithm 16: Iterated Local Search (ILS) with Random Restarts (p. 29)
+- Algorithm 108: Greedy Randomized Adaptive Search Procedures (GRASP) (p. 151)
