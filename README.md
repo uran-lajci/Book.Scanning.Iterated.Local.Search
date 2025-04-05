@@ -131,3 +131,6 @@ The implementation balances exploration (through perturbation and acceptance cri
 Luke, S. (2014). Essentials of Metaheuristics (2nd ed., Version 2.1). George Mason University. Retrieved from https://cs.gmu.edu/~sean/book/metaheuristics/
 - Algorithm 16: Iterated Local Search (ILS) with Random Restarts (p. 29)
 - Algorithm 108: Greedy Randomized Adaptive Search Procedures (GRASP) (p. 151)
+
+Algorithms inspired by nature 2025 class repository available on https://github.com/ArianitHalimi/AIN_25
+- Tweek operators used from this repository
