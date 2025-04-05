@@ -2,15 +2,9 @@ import random
 from collections import defaultdict
 import time
 from models.library import Library
-import os
-
-# from tqdm import tqdm
 from models.solution import Solution
 import copy
 import random
-import math
-
-
 class Solver:
     def iterated_local_search(self, data, time_limit=300, max_iterations=1000):
         """
