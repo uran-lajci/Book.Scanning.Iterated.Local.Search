@@ -1,583 +1,441 @@
 import random
-from collections import defaultdict
 import time
-from models.library import Library
 from models.solution import Solution
-import copy
-import random
+from models.initial_solution import InitialSolution
+from models.local_search import LocalSearch
+
 class Solver:
-    def iterated_local_search(self, data, time_limit=300, max_iterations=1000):
+    def iterated_local_search(self, data, time_limit=300, max_iterations=1000, pool_size=5):
         """
-        Implements Iterated Local Search (ILS) with Random Restarts
+        Perform Iterated Local Search (ILS) on the given problem data with enhanced acceptance and home base selection.
         Args:
-            data: The problem data
-            time_limit: Maximum time in seconds (default: 300s = 5 minutes)
-            max_iterations: Maximum number of iterations (default: 1000)
+            data: The problem data (libraries, scores, num_days, etc.)
+            time_limit: Maximum time to run the algorithm in seconds
+            max_iterations: Maximum number of iterations to perform
+            pool_size: Number of recent local optima to keep in the homebase pool
+        Returns:
+            The best solution found during the search
         """
-        min_time = 5
-        max_time = min(60, time_limit)
-        T = list(range(min_time, max_time + 1, 5))
-
-        S = self.generate_initial_solution_grasp(data, p=0.05, max_time=20)
-        print(f"Initial solution fitness: {S.fitness_score}")
-
-        H = copy.deepcopy(S)
-        Best = copy.deepcopy(S)
-
+        
+        # Detect instance size
+        num_libraries = len(data.libs)
+        num_books = len(data.scores)
+        instance_size = num_libraries * num_books
+        is_small_instance = instance_size < 100000
+        
+        # Set parameters based on instance size
+        if is_small_instance:
+            print(f"Small instance detected: {num_libraries} libraries, {num_books} books")
+            # For small instances, use more refined local search
+            max_local_search_time = 3.0  # Longer local search time for small instances
+        else:
+            max_local_search_time = 1.0  # Default local search time
+        
+        current_solution = InitialSolution.generate_initial_solution(data)
         start_time = time.time()
+        best_solution = current_solution
+        homebase_pool = []
+        
+        stagnation_counter = 0
+        max_stagnation = 50
+
         total_iterations = 0
+     
+        homebase_pool.append(current_solution)
+        print(f"Initial solution fitness: {current_solution.fitness_score}")
 
-        while (
-            total_iterations < max_iterations
-            and (time.time() - start_time) < time_limit
-        ):
-            local_time_limit = random.choice(T)
-            local_start_time = time.time()
-
-            while (time.time() - local_start_time) < local_time_limit and (
-                time.time() - start_time
-            ) < time_limit:
-
-                selected_tweak = self.choose_tweak_method()
-                R = selected_tweak(copy.deepcopy(S), data)
-
-                if R.fitness_score > S.fitness_score:
-                    S = copy.deepcopy(R)
-
-                if S.fitness_score >= data.calculate_upper_bound():
-                    return (S.fitness_score, S)
-
-                total_iterations += 1
-                if total_iterations >= max_iterations:
-                    break
-
-            if S.fitness_score > Best.fitness_score:
-                Best = copy.deepcopy(S)
-
-            if S.fitness_score >= H.fitness_score:
-                H = copy.deepcopy(S)
+        iteration = 0
+        while time.time() - start_time < time_limit and iteration < max_iterations:
+            remaining_time = time_limit - (time.time() - start_time)
+            progress = iteration / max_iterations
+            
+            # Adjust local search time based on instance size and progress
+            if is_small_instance:
+                # Allocate more time for local search on small instances
+                local_search_time = min(max_local_search_time, max(0.2, remaining_time * (1 - progress) / 60))
             else:
-                if random.random() < 0.1:
-                    H = copy.deepcopy(S)
+                local_search_time = min(max_local_search_time, max(0.1, remaining_time * (1 - progress) / 100))
+            
+            # Strategy selection - adapt based on stagnation
+            if stagnation_counter > max_stagnation * 0.7:
+                # When stagnating, use more disruptive perturbation
+                perturbation_strategies = ['remove_insert', 'reorder', 'shuffle']
+                weights = [0.5, 0.3, 0.2]  # Prefer remove_insert when stagnating
+            else:
+                perturbation_strategies = ['remove_insert', 'reorder', 'shuffle']
+                weights = [0.4, 0.4, 0.2]  # Balanced normally
+                
+            # For small instances, adjust strategy weights
+            if is_small_instance:
+                if stagnation_counter > max_stagnation * 0.7:
+                    # When stagnating on small instances, use more focused perturbation
+                    weights = [0.6, 0.3, 0.1]  # Even more emphasis on remove_insert
+                else:
+                    weights = [0.5, 0.4, 0.1]  # Favor library reordering for small instances
+                    
+            perturbation_strategy = random.choices(perturbation_strategies, weights=weights, k=1)[0]
+            
+            # Apply perturbation with adaptations for small instances
+            perturbed_solution = self.perturb_solution(
+                current_solution, 
+                data, 
+                strategy=perturbation_strategy,
+                stagnation_level=stagnation_counter/max_stagnation,
+                is_small_instance=is_small_instance
+            )
+            
+            if perturbed_solution.fitness_score > best_solution.fitness_score:
+                print(f"New best solution found after perturbation: {perturbed_solution.fitness_score}")
+         
+            # For small instances, use more intensive local search
+            if is_small_instance:
+                max_iterations_ls = 2000  # Double iterations for small instances
+            else:
+                max_iterations_ls = 1000  # Default iterations
+                
+            improved_solution = LocalSearch.local_search(
+                perturbed_solution, 
+                data, 
+                time_limit=local_search_time,
+                max_iterations=max_iterations_ls
+            )
 
-            S = self.perturb_solution(H, data)
+            accept = False
+            if improved_solution.fitness_score > current_solution.fitness_score:
+                accept = True
+                stagnation_counter = 0
+            else:
+                quality_diff = (current_solution.fitness_score - improved_solution.fitness_score) / current_solution.fitness_score
+                
+                # For small instances, be more selective with acceptance
+                if is_small_instance:
+                    # Lower acceptance probability for worse solutions on small instances
+                    accept_prob = 0.1 * (1 - quality_diff) * (1 + stagnation_counter/max_stagnation)
+                else:
+                    accept_prob = 0.2 * (1 - quality_diff)
+                    
+                if random.random() < accept_prob:
+                    accept = True
 
-            if Best.fitness_score >= data.calculate_upper_bound():
-                break
+            if accept:
+                current_solution = improved_solution
+                if all(s.fitness_score != current_solution.fitness_score for s in homebase_pool):
+                    homebase_pool.append(current_solution)
+                    if len(homebase_pool) > pool_size:
+                        homebase_pool.sort(key=lambda x: x.fitness_score)
+                        homebase_pool.pop(0)
+                if current_solution.fitness_score > best_solution.fitness_score:
+                    best_solution = current_solution
+                    print(f"New best solution found: {best_solution.fitness_score}")
 
-        return (Best.fitness_score, Best)
+            stagnation_counter += 1
+            if stagnation_counter >= max_stagnation:
+                print(f"Stagnation detected after {stagnation_counter} iterations. Restarting...")
+                current_solution = random.choice(homebase_pool)
+                stagnation_counter = 0
 
-    def perturb_solution(self, solution, data):
-        """Helper method for ILS to perturb solutions with destroy-and-rebuild strategy"""
-        perturbed = copy.deepcopy(solution)
+            if homebase_pool:
+                weights = [s.fitness_score for s in homebase_pool]
+                total_weight = sum(weights)
+                if total_weight > 0:
+                    weights = [w/total_weight for w in weights]
+                    current_solution = random.choices(homebase_pool, weights=weights, k=1)[0]
+                else:
+                    current_solution = random.choice(homebase_pool)
 
-        max_destroy_size = len(perturbed.signed_libraries)
-        if max_destroy_size == 0:
-            return perturbed
+            iteration += 1
+            total_iterations += 1
+            
+            # For small instances, apply additional local search periodically
+            if is_small_instance and iteration % 10 == 0:
+                # Every 10 iterations, do an extra intensive local search
+                extra_time = min(3.0, local_search_time * 2)
+                current_solution = LocalSearch.local_search(
+                    current_solution,
+                    data,
+                    time_limit=extra_time,
+                    max_iterations=2500
+                )
+                if current_solution.fitness_score > best_solution.fitness_score:
+                    best_solution = current_solution
+                    print(f"New best solution found during extra local search: {best_solution.fitness_score}")
 
-        destroy_size = random.randint(
-            min(1, max_destroy_size), min(max_destroy_size, max_destroy_size // 3 + 1)
+        total_time = time.time() - start_time
+        print(f"\nILS finished after {total_iterations} iterations and {total_time:.2f} seconds.")
+        print(f"Final best score: {best_solution.fitness_score}")
+        return best_solution
+        
+    def perturb_solution(self, solution, data, strategy='remove_insert', stagnation_level=0.0, is_small_instance=False):
+        """
+        Perturb the current solution using various strategies with adaptations for small instances.
+        Args:
+            solution: The current solution to perturb
+            data: The problem data
+            strategy: The perturbation strategy to use
+            stagnation_level: Level of stagnation (0.0-1.0)
+            is_small_instance: Whether this is a small problem instance
+        Returns:
+            A new perturbed solution
+        """
+        new_solution = self._clone_solution(solution)
+        
+        if strategy == 'remove_insert':
+            return self._perturb_remove_insert(new_solution, data, stagnation_level, is_small_instance)
+        elif strategy == 'reorder':
+            return self._perturb_reorder(new_solution, data, stagnation_level, is_small_instance)
+        elif strategy == 'shuffle':
+            return self._perturb_shuffle(new_solution, data, stagnation_level, is_small_instance)
+        else:
+            return self._perturb_remove_insert(new_solution, data, stagnation_level, is_small_instance)
+            
+    def _clone_solution(self, solution):
+        return Solution(
+            solution.signed_libraries.copy(),
+            solution.unsigned_libraries.copy(),
+            solution.scanned_books_per_library.copy(),
+            solution.scanned_books.copy()
         )
-
-        libraries_to_remove = random.sample(perturbed.signed_libraries, destroy_size)
-
-        new_signed_libraries = [
-            lib for lib in perturbed.signed_libraries if lib not in libraries_to_remove
-        ]
-        new_unsigned_libraries = perturbed.unsigned_libraries + libraries_to_remove
-
+    
+    def _calculate_library_efficiency(self, library, data, scanned_books):
+        """
+        Calculate library efficiency based on potential score, unique books, and signup cost.
+        """
+        # Get unscanned books
+        available_books = {book.id for book in library.books} - scanned_books
+        if not available_books:
+            return 0
+            
+        # Calculate score potential
+        score_potential = sum(data.scores[book_id] for book_id in available_books)
+        
+        # Calculate unique ratio
+        unique_ratio = len(available_books) / len(library.books)
+        
+        # Calculate time efficiency
+        time_efficiency = library.books_per_day / max(1, library.signup_days)
+        
+        # Combined score
+        efficiency = (score_potential * 0.6 + 
+                     unique_ratio * 0.2 + 
+                     time_efficiency * 0.2)
+                     
+        return efficiency
+        
+    def _perturb_remove_insert(self, solution, data, stagnation_level=0.0, is_small_instance=False):
+        # Adaptive perturbation size based on stagnation level
+        base_size = len(solution.signed_libraries) // 10  # 10% of libraries
+        
+        if is_small_instance:
+            # For small instances, start with smaller perturbations
+            if stagnation_level < 0.3:
+                # Low stagnation: perturb 5-10% of libraries
+                num_to_perturb = max(1, int(len(solution.signed_libraries) * 0.05 * (1 + stagnation_level)))
+            elif stagnation_level < 0.7:
+                # Medium stagnation: perturb 10-15% of libraries
+                num_to_perturb = max(1, int(len(solution.signed_libraries) * 0.10 * (1 + stagnation_level / 2)))
+            else:
+                # High stagnation: perturb 15-20% of libraries
+                num_to_perturb = max(1, int(len(solution.signed_libraries) * 0.15 * (1 + stagnation_level / 3)))
+                
+            # Cap at 20% for small instances
+            num_to_perturb = min(num_to_perturb, int(len(solution.signed_libraries) * 0.20))
+        else:
+            # For larger instances, use standard sizing with stagnation adaptation
+            num_to_perturb = max(1, min(5, int(base_size * (1 + stagnation_level))))
+        
+        # Select libraries to remove - for small instances, be more strategic
+        if is_small_instance and random.random() < 0.7:  # 70% chance for strategic selection
+            # For small instances, use biased selection to favor:
+            # 1. Libraries with low efficiency in current position
+            # 2. Libraries that might perform better elsewhere
+            
+            # Calculate efficiency scores for signed libraries
+            library_scores = []
+            for i, lib_id in enumerate(solution.signed_libraries):
+                library = data.libs[lib_id]
+                efficiency = self._calculate_library_efficiency(library, data, solution.scanned_books)
+                library_scores.append((i, lib_id, efficiency))
+            
+            # Sort by efficiency (ascending so lowest scores come first)
+            library_scores.sort(key=lambda x: x[2])
+            
+            # Select indices of lowest-scoring libraries to remove
+            to_remove_indices = sorted([score[0] for score in library_scores[:num_to_perturb]])
+        else:
+            # Standard random selection
+            indices = list(range(len(solution.signed_libraries)))
+            to_remove_indices = sorted(random.sample(indices, num_to_perturb))
+        
+        # Remove selected libraries
+        destroyed_indices = []
+        for offset, idx in enumerate(to_remove_indices):
+            real_idx = idx - offset
+            lib_id = solution.signed_libraries.pop(real_idx)
+            destroyed_indices.append(idx)
+            solution.unsigned_libraries.append(lib_id)
+            if lib_id in solution.scanned_books_per_library:
+                del solution.scanned_books_per_library[lib_id]
+        
+        # For small instances, use intelligent insertion 50% of the time
+        if is_small_instance and random.random() < 0.5:
+            # Calculate efficiency for unsigned libraries
+            library_scores = []
+            for lib_id in solution.unsigned_libraries:
+                library = data.libs[lib_id]
+                efficiency = self._calculate_library_efficiency(library, data, solution.scanned_books)
+                library_scores.append((lib_id, efficiency))
+            
+            # Sort by efficiency (descending)
+            library_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Get top-scoring libraries
+            top_libs = [lib_id for lib_id, _ in library_scores[:num_to_perturb]]
+            
+            # Remove these from unsigned_libraries
+            for lib_id in top_libs:
+                solution.unsigned_libraries.remove(lib_id)
+            
+            # Insert strategically
+            for idx, lib_id in zip(destroyed_indices, top_libs):
+                insert_idx = min(idx, len(solution.signed_libraries))
+                solution.signed_libraries.insert(insert_idx, lib_id)
+        else:
+            # Standard random approach
+            random.shuffle(solution.unsigned_libraries)
+            for idx in destroyed_indices:
+                if not solution.unsigned_libraries:
+                    break
+                lib_id = solution.unsigned_libraries.pop()
+                insert_idx = min(idx, len(solution.signed_libraries))
+                solution.signed_libraries.insert(insert_idx, lib_id)
+            
+        return self._rebuild_solution(solution, data)
+        
+    def _perturb_reorder(self, solution, data, stagnation_level=0.0, is_small_instance=False):
+        if len(solution.signed_libraries) < 2:
+            return solution
+            
+        # Adaptive perturbation size based on stagnation level and instance size
+        if is_small_instance:
+            # For small instances, reorder more libraries
+            if stagnation_level < 0.3:
+                # Low stagnation: reorder 10-15% of libraries
+                num_to_reorder = max(2, int(len(solution.signed_libraries) * 0.10 * (1 + stagnation_level / 2)))
+            elif stagnation_level < 0.7:
+                # Medium stagnation: reorder 15-20% of libraries
+                num_to_reorder = max(2, int(len(solution.signed_libraries) * 0.15 * (1 + stagnation_level / 3)))
+            else:
+                # High stagnation: reorder 20-25% of libraries
+                num_to_reorder = max(2, int(len(solution.signed_libraries) * 0.20 * (1 + stagnation_level / 4)))
+                
+            # Cap at 25% for small instances
+            num_to_reorder = min(num_to_reorder, int(len(solution.signed_libraries) * 0.25))
+        else:
+            # For larger instances, use standard approach
+            num_to_reorder = min(5, max(2, int(len(solution.signed_libraries) // 3 * (1 + stagnation_level / 2))))
+        
+        indices = random.sample(range(len(solution.signed_libraries)), num_to_reorder)
+        
+        # For small instances, use intelligent reordering occasionally
+        if is_small_instance and random.random() < 0.4:  # 40% chance for intelligent reordering
+            # Calculate efficiency for each library to be reordered
+            library_scores = []
+            for i in indices:
+                lib_id = solution.signed_libraries[i]
+                library = data.libs[lib_id]
+                efficiency = self._calculate_library_efficiency(library, data, solution.scanned_books)
+                library_scores.append((i, lib_id, efficiency))
+            
+            # Sort by efficiency (descending)
+            library_scores.sort(key=lambda x: x[2], reverse=True)
+            
+            # Assign libraries to positions based on efficiency
+            # Higher efficiency libraries go to earlier positions
+            sorted_indices = sorted(indices)
+            for i, (_, lib_id, _) in enumerate(library_scores):
+                pos = sorted_indices[i]
+                solution.signed_libraries[pos] = lib_id
+        else:
+            # Standard random reordering
+            libraries_to_reorder = [solution.signed_libraries[i] for i in indices]
+            random.shuffle(libraries_to_reorder)
+            
+            for i, lib_id in zip(indices, libraries_to_reorder):
+                solution.signed_libraries[i] = lib_id
+            
+        return self._rebuild_solution(solution, data)
+        
+    def _perturb_shuffle(self, solution, data, stagnation_level=0.0, is_small_instance=False):
+        if len(solution.signed_libraries) < 2:
+            return solution
+            
+        # Adaptive segment size based on stagnation level and instance size
+        if is_small_instance:
+            # For small instances, use larger segments
+            segment_size_min = max(2, int(len(solution.signed_libraries) * 0.10))
+            segment_size_max = max(3, int(len(solution.signed_libraries) * (0.20 + stagnation_level * 0.10)))
+            
+            # Ensure max doesn't exceed array length
+            segment_size_max = min(segment_size_max, len(solution.signed_libraries))
+            
+            # Random segment size within range
+            segment_size = random.randint(segment_size_min, segment_size_max)
+            
+            # Select start position to ensure we don't exceed array bounds
+            max_start = len(solution.signed_libraries) - segment_size
+            start_idx = random.randint(0, max_start)
+            end_idx = start_idx + segment_size
+        else:
+            # Standard approach for larger instances
+            start_idx = random.randint(0, len(solution.signed_libraries) - 2)
+            end_idx = random.randint(start_idx + 1, len(solution.signed_libraries))
+        
+        # For small instances, occasionally use intelligent shuffling
+        if is_small_instance and random.random() < 0.3:  # 30% chance for intelligent shuffling
+            # Extract segment to shuffle
+            segment = solution.signed_libraries[start_idx:end_idx]
+            
+            # Calculate efficiency for each library in segment
+            library_scores = []
+            for lib_id in segment:
+                library = data.libs[lib_id]
+                efficiency = self._calculate_library_efficiency(library, data, solution.scanned_books)
+                library_scores.append((lib_id, efficiency))
+            
+            # Sort by efficiency (descending)
+            library_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Replace segment with efficiency-sorted libraries
+            solution.signed_libraries[start_idx:end_idx] = [lib_id for lib_id, _ in library_scores]
+        else:
+            # Standard random shuffling
+            subsegment = solution.signed_libraries[start_idx:end_idx]
+            random.shuffle(subsegment)
+            solution.signed_libraries[start_idx:end_idx] = subsegment
+        
+        return self._rebuild_solution(solution, data)
+        
+    def _rebuild_solution(self, solution, data):
+        curr_time = 0
         new_scanned_books = set()
         new_scanned_books_per_library = {}
-
-        for lib_id in new_signed_libraries:
-            if lib_id in perturbed.scanned_books_per_library:
-                new_scanned_books_per_library[lib_id] = (
-                    perturbed.scanned_books_per_library[lib_id].copy()
-                )
-                new_scanned_books.update(new_scanned_books_per_library[lib_id])
-
-        curr_time = sum(
-            data.libs[lib_id].signup_days for lib_id in new_signed_libraries
-        )
-
-        lib_scores = []
-        for lib_id in new_unsigned_libraries:
+        
+        for lib_id in solution.signed_libraries:
             library = data.libs[lib_id]
-            available_books = [
-                b for b in library.books if b.id not in new_scanned_books
-            ]
-            if not available_books:
-                continue
-            avg_score = sum(data.scores[b.id] for b in available_books) / len(
-                available_books
-            )
-            score = library.books_per_day * avg_score / library.signup_days
-            lib_scores.append((score, lib_id))
-
-        lib_scores.sort(reverse=True)
-
-        for _, lib_id in lib_scores:
-            library = data.libs[lib_id]
-
             if curr_time + library.signup_days >= data.num_days:
                 continue
-
             time_left = data.num_days - (curr_time + library.signup_days)
             max_books_scanned = time_left * library.books_per_day
-
             available_books = sorted(
                 {book.id for book in library.books} - new_scanned_books,
-                key=lambda b: -data.scores[b],
+                key=lambda b: -data.scores[b]
             )[:max_books_scanned]
-
             if available_books:
-                new_signed_libraries.append(lib_id)
                 new_scanned_books_per_library[lib_id] = available_books
                 new_scanned_books.update(available_books)
                 curr_time += library.signup_days
-                new_unsigned_libraries.remove(lib_id)
-
-        rebuilt_solution = Solution(
-            new_signed_libraries,
-            new_unsigned_libraries,
-            new_scanned_books_per_library,
-            new_scanned_books,
-        )
-        rebuilt_solution.calculate_fitness_score(data.scores)
-
-        return rebuilt_solution
-
-
-    def crossover(self, solution, data):
-        """Performs crossover by shuffling library order and swapping books accordingly."""
-        new_solution = copy.deepcopy(solution)
-
-        old_order = new_solution.signed_libraries[:]
-        library_indices = list(range(len(data.libs)))
-        random.shuffle(library_indices)
-
-        new_scanned_books_per_library = {}
-
-        for new_idx, new_lib_idx in enumerate(library_indices):
-            if new_idx >= len(old_order):
-                break
-
-            old_lib_id = old_order[new_idx]
-            new_lib_id = new_lib_idx
-
-            if new_lib_id < 0 or new_lib_id >= len(data.libs):
-                print(
-                    f"Warning: new_lib_id {new_lib_id} is out of range for data.libs (size: {len(data.libs)})"
-                )
-                continue
-
-            if old_lib_id in new_solution.scanned_books_per_library:
-                books_to_move = new_solution.scanned_books_per_library[old_lib_id]
-
-                existing_books_in_new_lib = {
-                    book.id for book in data.libs[new_lib_id].books
-                }
-
-                valid_books = []
-                for book_id in books_to_move:
-                    if book_id not in existing_books_in_new_lib and book_id not in [
-                        b for b in valid_books
-                    ]:
-                        valid_books.append(book_id)
-
-                new_scanned_books_per_library[new_lib_id] = valid_books
-
-        new_solution.scanned_books_per_library = new_scanned_books_per_library
-        new_solution.calculate_fitness_score(data.scores)
-
-        return new_solution
-
-    def tweak_solution_swap_signed(self, solution, data):
-        """
-        Randomly swaps two libraries within the signed libraries list.
-        This creates a new solution by exchanging the positions of two libraries
-        while maintaining the feasibility of the solution.
-
-        Args:
-            solution: The current solution to tweak
-            data: The problem data
-
-        Returns:
-            A new solution with two libraries swapped
-        """
-        if len(solution.signed_libraries) < 2:
-            return solution
-
-        new_solution = copy.deepcopy(solution)
-
-        idx1, idx2 = random.sample(range(len(solution.signed_libraries)), 2)
-
-        lib_id1 = solution.signed_libraries[idx1]
-        lib_id2 = solution.signed_libraries[idx2]
-
-        new_signed_libraries = solution.signed_libraries.copy()
-        new_signed_libraries[idx1] = lib_id2
-        new_signed_libraries[idx2] = lib_id1
-
-        curr_time = 0
-        scanned_books = set()
-        new_scanned_books_per_library = {}
-
-        for lib_id in new_signed_libraries:
-            library = data.libs[lib_id]
-
-            if curr_time + library.signup_days >= data.num_days:
-                new_solution.unsigned_libraries.append(lib_id)
-                continue
-
-            time_left = data.num_days - (curr_time + library.signup_days)
-            max_books_scanned = time_left * library.books_per_day
-
-            available_books = []
-            for book in library.books:
-                if (
-                    book.id not in scanned_books
-                    and len(available_books) < max_books_scanned
-                ):
-                    available_books.append(book.id)
-
-            if available_books:
-                new_scanned_books_per_library[lib_id] = available_books
-                scanned_books.update(available_books)
-                curr_time += library.signup_days
-            else:
-                new_solution.unsigned_libraries.append(lib_id)
-
-        new_solution.signed_libraries = new_signed_libraries
-        new_solution.scanned_books_per_library = new_scanned_books_per_library
-        new_solution.scanned_books = scanned_books
-
-        new_solution.calculate_fitness_score(data.scores)
-
-        return new_solution
-
-    def tweak_solution_swap_signed_with_unsigned(
-        self, solution, data, bias_type=None, bias_ratio=2 / 3
-    ):
-        if not solution.signed_libraries or not solution.unsigned_libraries:
-            return solution
-
-        local_signed_libs = solution.signed_libraries.copy()
-        local_unsigned_libs = solution.unsigned_libraries.copy()
-
-        total_signed = len(local_signed_libs)
-
-        if bias_type == "favor_first_half":
-            if random.random() < bias_ratio:
-                signed_idx = random.randint(0, total_signed // 2 - 1)
-            else:
-                signed_idx = random.randint(0, total_signed - 1)
-        elif bias_type == "favor_second_half":
-            if random.random() < bias_ratio:
-                signed_idx = random.randint(total_signed // 2, total_signed - 1)
-            else:
-                signed_idx = random.randint(0, total_signed - 1)
-        else:
-            signed_idx = random.randint(0, total_signed - 1)
-
-        unsigned_idx = random.randint(0, len(local_unsigned_libs) - 1)
-
-        signed_lib_id = local_signed_libs[signed_idx]
-        unsigned_lib_id = local_unsigned_libs[unsigned_idx]
-
-        local_signed_libs[signed_idx] = unsigned_lib_id
-        local_unsigned_libs[unsigned_idx] = signed_lib_id
-
-        curr_time = 0
-        scanned_books = set()
-        new_scanned_books_per_library = {}
-
-        lib_lookup = {lib.id: lib for lib in data.libs}
-
-        for i in range(signed_idx):
-            lib_id = solution.signed_libraries[i]
-            library = lib_lookup.get(lib_id)
-
-            curr_time += library.signup_days
-            time_left = data.num_days - curr_time
-            max_books_scanned = time_left * library.books_per_day
-
-            available_books = [
-                book.id for book in library.books if book.id not in scanned_books
-            ][:max_books_scanned]
-
-            if available_books:
-                new_scanned_books_per_library[library.id] = available_books
-                scanned_books.update(available_books)
-
-        new_signed_libraries = local_signed_libs[:signed_idx]
-
-        for i in range(signed_idx, len(local_signed_libs)):
-            lib_id = local_signed_libs[i]
-            library = lib_lookup.get(lib_id)
-
-            if curr_time + library.signup_days >= data.num_days:
-                solution.unsigned_libraries.append(library.id)
-                continue
-
-            curr_time += library.signup_days
-            time_left = data.num_days - curr_time
-            max_books_scanned = time_left * library.books_per_day
-
-            available_books = [
-                book.id for book in library.books if book.id not in scanned_books
-            ][:max_books_scanned]
-
-            if available_books:
-                new_signed_libraries.append(library.id)
-                new_scanned_books_per_library[library.id] = available_books
-                scanned_books.update(available_books)
-
-        new_solution = Solution(
-            new_signed_libraries,
-            local_unsigned_libs,
-            new_scanned_books_per_library,
-            scanned_books,
-        )
-        new_solution.calculate_fitness_score(data.scores)
-
-        return new_solution
-
-    def tweak_solution_swap_same_books(self, solution, data):
-        library_ids = [lib for lib in solution.signed_libraries if lib < len(data.libs)]
-
-        if len(library_ids) < 2:
-            return solution
-
-        idx1 = random.randint(0, len(library_ids) - 1)
-        idx2 = random.randint(0, len(library_ids) - 1)
-        while idx1 == idx2:
-            idx2 = random.randint(0, len(library_ids) - 1)
-
-        library_ids[idx1], library_ids[idx2] = library_ids[idx2], library_ids[idx1]
-
-        ordered_libs = [data.libs[lib_id] for lib_id in library_ids]
-
-        all_lib_ids = set(range(len(data.libs)))
-        remaining_lib_ids = all_lib_ids - set(library_ids)
-        for lib_id in sorted(remaining_lib_ids):
-            ordered_libs.append(data.libs[lib_id])
-
-        signed_libraries = []
-        unsigned_libraries = []
-        scanned_books_per_library = {}
-        scanned_books = set()
-        curr_time = 0
-
-        for library in ordered_libs:
-            if curr_time + library.signup_days >= data.num_days:
-                unsigned_libraries.append(library.id)
-                continue
-
-            time_left = data.num_days - (curr_time + library.signup_days)
-            max_books_scanned = time_left * library.books_per_day
-
-            available_books = sorted(
-                {book.id for book in library.books} - scanned_books,
-                key=lambda b: -data.scores[b],
-            )[:max_books_scanned]
-
-            if available_books:
-                signed_libraries.append(library.id)
-                scanned_books_per_library[library.id] = available_books
-                scanned_books.update(available_books)
-                curr_time += library.signup_days
-
-        new_solution = Solution(
-            signed_libraries,
-            unsigned_libraries,
-            scanned_books_per_library,
-            scanned_books,
-        )
-        new_solution.calculate_fitness_score(data.scores)
-
-        return new_solution
-
-    def hill_climbing_swap_same_books(self, data, iterations=1000):
-        Library._id_counter = 0
-        solution = self.generate_initial_solution(data)
-
-        for i in range(iterations):
-            new_solution = self.tweak_solution_swap_same_books(solution, data)
-
-            if new_solution.fitness_score > solution.fitness_score:
-                solution = new_solution
-
-        return (solution.fitness_score, solution)
-
-    def tweak_solution_swap_last_book(self, solution, data):
-        if not solution.scanned_books_per_library or not solution.unsigned_libraries:
-            return solution
-
-        chosen_lib_id = random.choice(list(solution.scanned_books_per_library.keys()))
-        scanned_books = solution.scanned_books_per_library[chosen_lib_id]
-
-        if not scanned_books:
-            return solution
-
-        last_scanned_book = scanned_books[-1]
-
-        library_dict = {lib.id: lib for lib in data.libs}
-
-        best_book = None
-        best_score = -1
-
-        for unsigned_lib in solution.unsigned_libraries:
-            library = library_dict[unsigned_lib]
-
-            for book in library.books:
-                if book.id not in solution.scanned_books:
-                    if data.scores[book.id] > best_score:
-                        best_score = data.scores[book.id]
-                        best_book = book.id
-
-        if best_book is None:
-            return solution
-
-        new_scanned_books = scanned_books[:-1] + [best_book]
-        new_scanned_books_per_library = solution.scanned_books_per_library.copy()
-        new_scanned_books_per_library[chosen_lib_id] = new_scanned_books
-
-        new_scanned_books_set = set()
-        for books in new_scanned_books_per_library.values():
-            new_scanned_books_set.update(books)
-
-        new_solution = Solution(
-            solution.signed_libraries,
-            solution.unsigned_libraries,
-            new_scanned_books_per_library,
-            new_scanned_books_set,
-        )
-        new_solution.calculate_fitness_score(data.scores)
-
-        return new_solution
-
-   
-    def build_grasp_solution(self, data, p=0.05):
-        """
-        Build a feasible solution using a GRASP-like approach:
-          - Sorting libraries by signup_days ASC, then total_score DESC.
-          - Repeatedly choosing from the top p% feasible libraries at random.
-
-        Args:
-            data: The problem data (libraries, scores, num_days, etc.)
-            p: Percentage (as a fraction) for the restricted candidate list (RCL)
-
-        Returns:
-            A Solution object with the constructed solution
-        """
-        libs_sorted = sorted(
-            data.libs,
-            key=lambda l: (l.signup_days, -sum(data.scores[b.id] for b in l.books)),
-        )
-
-        signed_libraries = []
-        unsigned_libraries = []
-        scanned_books_per_library = {}
-        scanned_books = set()
-        curr_time = 0
-
-        candidate_libs = libs_sorted[:]
-
-        while candidate_libs:
-            rcl_size = max(1, int(len(candidate_libs) * p))
-            rcl = candidate_libs[:rcl_size]
-
-            chosen_lib = random.choice(rcl)
-            candidate_libs.remove(chosen_lib)
-
-            if curr_time + chosen_lib.signup_days >= data.num_days:
-                unsigned_libraries.append(chosen_lib.id)
-            else:
-                time_left = data.num_days - (curr_time + chosen_lib.signup_days)
-                max_books_scanned = time_left * chosen_lib.books_per_day
-
-                available_books = sorted(
-                    {book.id for book in chosen_lib.books} - scanned_books,
-                    key=lambda b: -data.scores[b],
-                )[:max_books_scanned]
-
-                if available_books:
-                    signed_libraries.append(chosen_lib.id)
-                    scanned_books_per_library[chosen_lib.id] = available_books
-                    scanned_books.update(available_books)
-                    curr_time += chosen_lib.signup_days
-                else:
-                    unsigned_libraries.append(chosen_lib.id)
-
-        solution = Solution(
-            signed_libraries,
-            unsigned_libraries,
-            scanned_books_per_library,
-            scanned_books,
-        )
+                
+        solution.scanned_books_per_library = new_scanned_books_per_library
+        solution.scanned_books = new_scanned_books
         solution.calculate_fitness_score(data.scores)
         return solution
-
-    def generate_initial_solution_grasp(self, data, p=0.05, max_time=60):
-        """
-        Generate an initial solution using a GRASP-like approach:
-          1) Sort libraries by (signup_days ASC, total_score DESC).
-          2) Repeatedly pick from top p% of feasible libraries at random.
-          3) Optionally improve with a quick local search for up to max_time seconds.
-
-        :param data:      The problem data (libraries, scores, num_days, etc.).
-        :param p:         Percentage (as a fraction) for the restricted candidate list (RCL).
-        :param max_time:  Time limit (in seconds) to repeat GRASP + local search.
-        :return:          A Solution object with the best found solution.
-        """
-        start_time = time.time()
-        best_solution = None
-        Library._id_counter = 0
-
-        while time.time() - start_time < max_time:
-            candidate_solution = self.build_grasp_solution(data, p)
-
-            improved_solution = self.local_search(
-                candidate_solution, data, time_limit=1.0
-            )
-
-            if (best_solution is None) or (
-                improved_solution.fitness_score > best_solution.fitness_score
-            ):
-                best_solution = improved_solution
-
-        return best_solution
-
-    def local_search(self, solution, data, time_limit=1.0):
-        """
-        A simple local search/hill-climbing method that randomly selects one of the available tweak methods.
-        Uses choose_tweak_method to select the tweak operation based on defined probabilities.
-        Runs for 'time_limit' seconds and tries small random modifications.
-        """
-        start_time = time.time()
-        best = copy.deepcopy(solution)
-
-        while time.time() - start_time < time_limit:
-            selected_tweak = self.choose_tweak_method()
-
-            neighbor = selected_tweak(copy.deepcopy(best), data)
-            if neighbor.fitness_score > best.fitness_score:
-                best = neighbor
-
-        return best
-
-    def choose_tweak_method(self):
-        """Randomly chooses a tweak method based on the defined probabilities."""
-        tweak_methods = [
-            (self.tweak_solution_swap_signed_with_unsigned, 0.5),
-            (self.tweak_solution_swap_same_books, 0.1),
-            (self.crossover, 0.2),
-            (self.tweak_solution_swap_last_book, 0.1),
-            (self.tweak_solution_swap_signed, 0.1),
-        ]
-
-        methods, weights = zip(*tweak_methods)
-
-        selected_method = random.choices(methods, weights=weights, k=1)[0]
-        return selected_method
