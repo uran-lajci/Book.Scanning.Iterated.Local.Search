@@ -112,9 +112,9 @@ def validate_solution(input_path, output_path, isConsoleApplication = False):
         if num_books != len(books):
             errors.append(f"Library {lib_id}: Declared {num_books} books, but actually listed {len(books)} books in output file.")
         
-        # invalid_books = [b for b in books if b not in library_books]
-        # if invalid_books:
-        #     errors.append(f"Library {lib_id} contains invalid books: {invalid_books}.")
+        invalid_books = [b for b in books if b not in library_books]
+        if invalid_books:
+            errors.append(f"Library {lib_id} contains invalid books: {invalid_books}.")
         
         if lib_id in used_libraries:
             errors.append(f"Library {lib_id} is listed multiple times in the solution.")
@@ -159,6 +159,11 @@ def validate_solution(input_path, output_path, isConsoleApplication = False):
 
     fitness_score = (0.5 * score_efficiency) + (0.3 * library_utilization) + (0.2 * book_scanning_efficiency)
 
+    if isConsoleApplication:
+            if errors:
+                return "Invalid"
+            return "Valid"
+    
     if errors:
         return "\n".join(errors)
     

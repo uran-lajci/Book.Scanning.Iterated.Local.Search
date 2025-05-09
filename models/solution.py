@@ -57,3 +57,11 @@ class Solution:
         updated_fitness = current_fitness + delta_fitness
 
         self.fitness_score = updated_fitness
+
+    def clone(self):
+        return Solution(
+            self.signed_libraries.copy(),
+            self.unsigned_libraries.copy(),
+            {k: v.copy() for k, v in self.scanned_books_per_library.items()},
+            self.scanned_books.copy()
+        )
