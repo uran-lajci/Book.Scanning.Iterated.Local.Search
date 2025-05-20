@@ -131,7 +131,7 @@ Parameters:
 
 Additional initial solution methods are implemented for comparison:
 1. **Sorted** - Simple greedy approach based on signup days and total score
-2. **Greedy Heap** - Priority queue based on library efficiency
+2. **Greedy** - Priority queue based on library efficiency
 3. **Weighted Efficiency** - Parameterized approach with tunable alpha and beta values
 
 ### Metodat e tjera të gjenerimit të zgjidhjes fillestare
@@ -146,7 +146,9 @@ Përveç GRASP, implementimi përfshin edhe disa metoda të tjera për të gjene
 
 **Formula për renditje:**
 
-$$\text{renditje} = (\text{signup\_days}, -\sum_{b \in \text{lib.books}} \text{score}_b)$$
+```text
+renditje = (signup_days, -sum(score_b për çdo b në lib.books))
+```
 
 **Hapat:**
 1. Rendit libraritë sipas formulës më lart.
@@ -162,7 +164,7 @@ $$\text{renditje} = (\text{signup\_days}, -\sum_{b \in \text{lib.books}} \text{s
 
 ---
 
-#### 2. Greedy Heap (Efikasiteti përmes heap-it)
+#### 2. Greedy
 
 **Ideja:**
 - Përdor një heap (priority queue) për të zgjedhur gjithmonë bibliotekën me efikasitetin më të lartë.
@@ -170,7 +172,9 @@ $$\text{renditje} = (\text{signup\_days}, -\sum_{b \in \text{lib.books}} \text{s
 
 **Formula për efikasitetin:**
 
-$$\text{efficiency} = \frac{\sum_{b \in \text{top books}} \text{score}_b}{\text{signup\_days}}$$
+```text
+efficiency = sum(score_b për çdo b në top books) / signup_days
+```
 
 ku "top books" janë librat më të vlefshëm që mund të skanohen brenda kohës së mbetur.
 
@@ -189,22 +193,25 @@ ku "top books" janë librat më të vlefshëm që mund të skanohen brenda kohë
 
 ---
 
-#### 3. Weighted Efficiency (Efikasitet i ponderuar me penalizim)
+#### 3. Weighted Efficiency (Efikasitet përmes peshave dhe penalizim)
 
 **Ideja:**
 - Përmirëson qasjen greedy duke penalizuar libraritë që zgjidhen më vonë ose kanë shumë ditë regjistrimi.
 - Përdor dy parametra të tunueshëm: α (alfa) dhe β (beta) për të balancuar penalizimin.
 
-**Formula për efikasitetin e ponderuar:**
+**Formula për efikasitetin përmes peshave:**
 
-$$\text{weighted\_efficiency} = \frac{\sum_{b \in \text{top books}} \text{score}_b}{(\text{signup\_days})^\alpha \cdot (1 + \beta \cdot \text{used})}$$
+```text
+weighted_efficiency = sum(score_b për çdo b në top books) / (signup_days^alpha * (1 + beta * used))
+```
 
 ku:
-- $\alpha$ kontrollon sa fort penalizohen ditët e regjistrimit,
-- $\beta$ penalizon libraritë që zgjidhen më vonë ($\text{used}$ është numri i librarive të zgjedhura deri tani).
+- top books: librat më të vlefshëm që mund të skanohen brenda kohës së mbetur
+- alpha: kontrollon sa fort penalizohen ditët e regjistrimit
+- beta: penalizon libraritë që zgjidhen më vonë (used është numri i librarive të zgjedhura deri tani)
 
 **Hapat:**
-1. Për secilën bibliotekë, llogarit efikasitetin e ponderuar sipas formulës.
+1. Për secilën bibliotekë, llogarit efikasitetin përmes peshave sipas formulës.
 2. Zgjidh gjithmonë bibliotekën me vlerën më të lartë të weighted_efficiency.
 3. Përditëso librat e skanuar, kohën dhe numrin e librarive të përdorura.
 4. Parametrat α dhe β mund të tunohen automatikisht për rezultate më të mira.
