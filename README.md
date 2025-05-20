@@ -134,6 +134,92 @@ Additional initial solution methods are implemented for comparison:
 2. **Greedy Heap** - Priority queue based on library efficiency
 3. **Weighted Efficiency** - Parameterized approach with tunable alpha and beta values
 
+### Metodat e tjera të gjenerimit të zgjidhjes fillestare
+
+Përveç GRASP, implementimi përfshin edhe disa metoda të tjera për të gjeneruar zgjidhje fillestare. Më poshtë janë shpjegimet dhe formulat për secilën:
+
+#### 1. Sorted (Greedy sipas renditjes)
+
+**Ideja:**
+- Libraritë renditen në mënyrë të thjeshtë sipas numrit të ditëve të regjistrimit (signup_days) në rritje dhe totalit të pikëve të librave që përmbajnë në zbritje.
+- Zgjidhen libraritë një nga një, duke u siguruar që të mos tejkalohet limiti i ditëve dhe të mos skanohen libra të përsëritur.
+
+**Formula për renditje:**
+
+$$\text{renditje} = (\text{signup\_days}, -\sum_{b \in \text{lib.books}} \text{score}_b)$$
+
+**Hapat:**
+1. Rendit libraritë sipas formulës më lart.
+2. Për secilën bibliotekë, nëse ka kohë të mjaftueshme për regjistrim, zgjedh librat më të vlefshëm që nuk janë skanuar ende.
+3. Përditëso listën e librave të skanuar dhe kohën e mbetur.
+
+**Avantazhe:**
+- Shumë e shpejtë dhe e thjeshtë.
+- Jep rezultate të mira për instanca të vogla.
+
+**Kufizime:**
+- Nuk merr parasysh efikasitetin e librarive në raport me kohën.
+
+---
+
+#### 2. Greedy Heap (Efikasiteti përmes heap-it)
+
+**Ideja:**
+- Përdor një heap (priority queue) për të zgjedhur gjithmonë bibliotekën me efikasitetin më të lartë.
+- Efikasiteti llogaritet si raporti i pikëve maksimale të mundshme ndaj ditëve të regjistrimit.
+
+**Formula për efikasitetin:**
+
+$$\text{efficiency} = \frac{\sum_{b \in \text{top books}} \text{score}_b}{\text{signup\_days}}$$
+
+ku "top books" janë librat më të vlefshëm që mund të skanohen brenda kohës së mbetur.
+
+**Hapat:**
+1. Për secilën bibliotekë, llogarit efikasitetin sipas formulës.
+2. Shto të gjitha libraritë në heap sipas efikasitetit.
+3. Në çdo hap, zgjedh bibliotekën me efikasitetin më të lartë, përditëso librat e skanuar dhe kohën.
+4. Përditëso heap-in nëse është e nevojshme.
+
+**Avantazhe:**
+- Merr parasysh raportin mes pikëve dhe kohës së regjistrimit.
+- Jep rezultate të mira për instanca të mëdha.
+
+**Kufizime:**
+- Mund të neglizhojë libraritë që kanë pak ditë regjistrimi por shumë libra të vlefshëm.
+
+---
+
+#### 3. Weighted Efficiency (Efikasitet i ponderuar me penalizim)
+
+**Ideja:**
+- Përmirëson qasjen greedy duke penalizuar libraritë që zgjidhen më vonë ose kanë shumë ditë regjistrimi.
+- Përdor dy parametra të tunueshëm: α (alfa) dhe β (beta) për të balancuar penalizimin.
+
+**Formula për efikasitetin e ponderuar:**
+
+$$\text{weighted\_efficiency} = \frac{\sum_{b \in \text{top books}} \text{score}_b}{(\text{signup\_days})^\alpha \cdot (1 + \beta \cdot \text{used})}$$
+
+ku:
+- $\alpha$ kontrollon sa fort penalizohen ditët e regjistrimit,
+- $\beta$ penalizon libraritë që zgjidhen më vonë ($\text{used}$ është numri i librarive të zgjedhura deri tani).
+
+**Hapat:**
+1. Për secilën bibliotekë, llogarit efikasitetin e ponderuar sipas formulës.
+2. Zgjidh gjithmonë bibliotekën me vlerën më të lartë të weighted_efficiency.
+3. Përditëso librat e skanuar, kohën dhe numrin e librarive të përdorura.
+4. Parametrat α dhe β mund të tunohen automatikisht për rezultate më të mira.
+
+**Avantazhe:**
+- Fleksibilitet i lartë përmes parametrave.
+- Jep rezultate shumë të mira në instanca të ndryshme.
+
+**Kufizime:**
+- Kërkon tunim të parametrave për performancë optimale.
+
+---
+
+Këto metoda përdoren për të gjeneruar zgjidhje fillestare të ndryshme, të cilat më pas përmirësohen me local search dhe perturbation. Zgjedhja e metodës më të mirë varet nga karakteristikat e instancës dhe parametrat e tunuar.
+
 ## Multiple Solution Handling
 
 The system processes multiple problem instances in sequence:
