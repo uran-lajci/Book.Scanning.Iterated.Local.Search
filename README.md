@@ -134,98 +134,98 @@ Additional initial solution methods are implemented for comparison:
 2. **Greedy** - Priority queue based on library efficiency
 3. **Weighted Efficiency** - Parameterized approach with tunable alpha and beta values
 
-### Metodat e tjera të gjenerimit të zgjidhjes fillestare
+### Additional Methods for Initial Solution Generation
 
-Përveç GRASP, implementimi përfshin edhe disa metoda të tjera për të gjeneruar zgjidhje fillestare. Më poshtë janë shpjegimet dhe formulat për secilën:
+In addition to GRASP, the implementation includes several other methods for generating initial solutions. Below are the explanations and formulas for each:
 
-#### 1. Sorted (Greedy sipas renditjes)
+#### 1. Sorted (Greedy by Sorting)
 
-**Ideja:**
-- Libraritë renditen në mënyrë të thjeshtë sipas numrit të ditëve të regjistrimit (signup_days) në rritje dhe totalit të pikëve të librave që përmbajnë në zbritje.
-- Zgjidhen libraritë një nga një, duke u siguruar që të mos tejkalohet limiti i ditëve dhe të mos skanohen libra të përsëritur.
+**Idea:**
+- Libraries are simply sorted by signup days (ascending) and total book scores (descending).
+- Libraries are selected one by one, ensuring that the day limit is not exceeded and no books are scanned twice.
 
-**Formula për renditje:**
+**Sorting Formula:**
 
 ```text
-renditje = (signup_days, -sum(score_b për çdo b në lib.books))
+sorting = (signup_days, -sum(score_b for each b in lib.books))
 ```
 
-**Hapat:**
-1. Rendit libraritë sipas formulës më lart.
-2. Për secilën bibliotekë, nëse ka kohë të mjaftueshme për regjistrim, zgjedh librat më të vlefshëm që nuk janë skanuar ende.
-3. Përditëso listën e librave të skanuar dhe kohën e mbetur.
+**Steps:**
+1. Sort libraries according to the formula above.
+2. For each library, if there is enough time for signup, select the most valuable books that have not been scanned yet.
+3. Update the list of scanned books and the remaining time.
 
-**Avantazhe:**
-- Shumë e shpejtë dhe e thjeshtë.
-- Jep rezultate të mira për instanca të vogla.
+**Advantages:**
+- Very fast and simple.
+- Yields good results for small instances.
 
-**Kufizime:**
-- Nuk merr parasysh efikasitetin e librarive në raport me kohën.
+**Limitations:**
+- Does not account for library efficiency in relation to time.
 
 ---
 
-#### 2. Greedy
+#### 2. Greedy Heap (Efficiency via Heap)
 
-**Ideja:**
-- Përdor një heap (priority queue) për të zgjedhur gjithmonë bibliotekën me efikasitetin më të lartë.
-- Efikasiteti llogaritet si raporti i pikëve maksimale të mundshme ndaj ditëve të regjistrimit.
+**Idea:**
+- Uses a heap (priority queue) to always select the library with the highest efficiency.
+- Efficiency is calculated as the ratio of maximum possible scores to signup days.
 
-**Formula për efikasitetin:**
+**Efficiency Formula:**
 
 ```text
-efficiency = sum(score_b për çdo b në top books) / signup_days
+efficiency = sum(score_b for each b in top books) / signup_days
 ```
 
-ku "top books" janë librat më të vlefshëm që mund të skanohen brenda kohës së mbetur.
+where "top books" are the most valuable books that can be scanned within the remaining time.
 
-**Hapat:**
-1. Për secilën bibliotekë, llogarit efikasitetin sipas formulës.
-2. Shto të gjitha libraritë në heap sipas efikasitetit.
-3. Në çdo hap, zgjedh bibliotekën me efikasitetin më të lartë, përditëso librat e skanuar dhe kohën.
-4. Përditëso heap-in nëse është e nevojshme.
+**Steps:**
+1. For each library, calculate the efficiency according to the formula.
+2. Add all libraries to the heap based on efficiency.
+3. In each step, select the library with the highest efficiency, update scanned books and time.
+4. Update the heap if necessary.
 
-**Avantazhe:**
-- Merr parasysh raportin mes pikëve dhe kohës së regjistrimit.
-- Jep rezultate të mira për instanca të mëdha.
+**Advantages:**
+- Considers the ratio between scores and signup time.
+- Yields good results for large instances.
 
-**Kufizime:**
-- Mund të neglizhojë libraritë që kanë pak ditë regjistrimi por shumë libra të vlefshëm.
+**Limitations:**
+- May overlook libraries with few signup days but many valuable books.
 
 ---
 
-#### 3. Weighted Efficiency (Efikasitet përmes peshave dhe penalizim)
+#### 3. Weighted Efficiency (Efficiency via Weights and Penalty)
 
-**Ideja:**
-- Përmirëson qasjen greedy duke penalizuar libraritë që zgjidhen më vonë ose kanë shumë ditë regjistrimi.
-- Përdor dy parametra të tunueshëm: α (alfa) dhe β (beta) për të balancuar penalizimin.
+**Idea:**
+- Improves the greedy approach by penalizing libraries that are selected later or have many signup days.
+- Uses two tunable parameters: α (alpha) and β (beta) to balance the penalty.
 
-**Formula për efikasitetin përmes peshave:**
+**Weighted Efficiency Formula:**
 
 ```text
-weighted_efficiency = sum(score_b për çdo b në top books) / (signup_days^alpha * (1 + beta * used))
+weighted_efficiency = sum(score_b for each b in top books) / (signup_days^alpha * (1 + beta * used))
 ```
 
-ku:
-- top books: librat më të vlefshëm që mund të skanohen brenda kohës së mbetur
-- alpha: kontrollon sa fort penalizohen ditët e regjistrimit
-- beta: penalizon libraritë që zgjidhen më vonë (used është numri i librarive të zgjedhura deri tani)
+where:
+- top books: the most valuable books that can be scanned within the remaining time
+- alpha: controls how strongly signup days are penalized
+- beta: penalizes libraries that are selected later (used is the number of libraries selected so far)
 
-**Hapat:**
-1. Për secilën bibliotekë, llogarit efikasitetin përmes peshave sipas formulës.
-2. Zgjidh gjithmonë bibliotekën me vlerën më të lartë të weighted_efficiency.
-3. Përditëso librat e skanuar, kohën dhe numrin e librarive të përdorura.
-4. Parametrat α dhe β mund të tunohen automatikisht për rezultate më të mira.
+**Steps:**
+1. For each library, calculate the weighted efficiency according to the formula.
+2. Always select the library with the highest weighted_efficiency value.
+3. Update scanned books, time, and the number of used libraries.
+4. Parameters α and β can be automatically tuned for better results.
 
-**Avantazhe:**
-- Fleksibilitet i lartë përmes parametrave.
-- Jep rezultate shumë të mira në instanca të ndryshme.
+**Advantages:**
+- High flexibility through parameters.
+- Yields very good results across different instances.
 
-**Kufizime:**
-- Kërkon tunim të parametrave për performancë optimale.
+**Limitations:**
+- Requires parameter tuning for optimal performance.
 
 ---
 
-Këto metoda përdoren për të gjeneruar zgjidhje fillestare të ndryshme, të cilat më pas përmirësohen me local search dhe perturbation. Zgjedhja e metodës më të mirë varet nga karakteristikat e instancës dhe parametrat e tunuar.
+These methods are used to generate different initial solutions, which are then improved with local search and perturbation. The choice of the best method depends on the instance characteristics and tuned parameters.
 
 ## Multiple Solution Handling
 
