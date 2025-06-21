@@ -365,15 +365,15 @@ class InitialSolution:
     @staticmethod
     def generate_initial_solution(data):
         best_solution = None
-        print("\nGenerating solutions using different methods:")
-        print("-" * 50)
+        # print("\nGenerating solutions using different methods:")
+        # print("-" * 50)
 
         best_alpha, best_beta, best_score, weighted_solution = (
             InitialSolution.tune_weighted_efficiency_parameters(data, time_limit=60)
         )
-        print(f"\nWeighted Efficiency Solution:")
-        print(f"Score: {weighted_solution.fitness_score}")
-        print(f"Best Alpha: {best_alpha}, Best Beta: {best_beta}")
+        # print(f"\nWeighted Efficiency Solution:")
+        # print(f"Score: {weighted_solution.fitness_score}")
+        # print(f"Best Alpha: {best_alpha}, Best Beta: {best_beta}")
         best_solution = weighted_solution
 
         generation_methods = [
@@ -399,8 +399,8 @@ class InitialSolution:
         for method, kwargs, method_name in generation_methods:
             try:
                 initial_solution = method(data, **kwargs)
-                print(f"\n{method_name} Solution:")
-                print(f"Score: {initial_solution.fitness_score}")
+                # print(f"\n{method_name} Solution:")
+                # print(f"Score: {initial_solution.fitness_score}")
                 if initial_solution.fitness_score > 0:
                     if (
                         best_solution is None
@@ -411,9 +411,9 @@ class InitialSolution:
                 print(f"Error generating solution with {method_name}: {e}")
                 continue
 
-        print("\nBest Solution Found:")
-        print(f"Score: {best_solution.fitness_score}")
-        print("-" * 50)
+        # print("\nBest Solution Found:")
+        # print(f"Score: {best_solution.fitness_score}")
+        # print("-" * 50)
 
         if best_solution is None:
             raise Exception("No valid initial solution could be generated")

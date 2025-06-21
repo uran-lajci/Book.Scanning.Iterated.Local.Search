@@ -25,7 +25,7 @@ class Solver:
         
         # Set parameters based on instance size
         if is_small_instance:
-            print(f"Small instance detected: {num_libraries} libraries, {num_books} books")
+            # print(f"Small instance detected: {num_libraries} libraries, {num_books} books")
             # For small instances, use more refined local search
             max_local_search_time = 3.0  # Longer local search time for small instances
         else:
@@ -42,7 +42,7 @@ class Solver:
         total_iterations = 0
      
         homebase_pool.append(current_solution)
-        print(f"Initial solution fitness: {current_solution.fitness_score}")
+        # print(f"Best initial solution fitness: {current_solution.fitness_score}")
 
         iteration = 0
         while time.time() - start_time < time_limit and iteration < max_iterations:
@@ -84,8 +84,8 @@ class Solver:
                 is_small_instance=is_small_instance
             )
             
-            if perturbed_solution.fitness_score > best_solution.fitness_score:
-                print(f"New best solution found after perturbation: {perturbed_solution.fitness_score}")
+            # if perturbed_solution.fitness_score > best_solution.fitness_score:
+                # print(f"New best solution found after perturbation: {perturbed_solution.fitness_score}")
          
             # For small instances, use more intensive local search
             if is_small_instance:
@@ -126,11 +126,11 @@ class Solver:
                         homebase_pool.pop(0)
                 if current_solution.fitness_score > best_solution.fitness_score:
                     best_solution = current_solution
-                    print(f"New best solution found: {best_solution.fitness_score}")
+                    # print(f"New best solution found: {best_solution.fitness_score}")
 
             stagnation_counter += 1
             if stagnation_counter >= max_stagnation:
-                print(f"Stagnation detected after {stagnation_counter} iterations. Restarting...")
+                # print(f"Stagnation detected after {stagnation_counter} iterations. Restarting...")
                 current_solution = random.choice(homebase_pool)
                 stagnation_counter = 0
 
@@ -158,11 +158,11 @@ class Solver:
                 )
                 if current_solution.fitness_score > best_solution.fitness_score:
                     best_solution = current_solution
-                    print(f"New best solution found during extra local search: {best_solution.fitness_score}")
+                    # print(f"New best solution found during extra local search: {best_solution.fitness_score}")
 
         total_time = time.time() - start_time
-        print(f"\nILS finished after {total_iterations} iterations and {total_time:.2f} seconds.")
-        print(f"Final best score: {best_solution.fitness_score}")
+        # print(f"\nILS finished after {total_iterations} iterations and {total_time:.2f} seconds.")
+        # print(f"Final best score: {best_solution.fitness_score}")
         return best_solution
         
     def perturb_solution(self, solution, data, strategy='remove_insert', stagnation_level=0.0, is_small_instance=False):
