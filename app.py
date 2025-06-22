@@ -1,6 +1,6 @@
 from models import Parser
 from models import Solver
-from validator.multiple_validator import validate_all_solutions
+from multiple_validator import validate_all_solutions
 import os
 
 
