@@ -258,7 +258,7 @@ def main():
         sys.exit(app.exec())
 
 
-def validate_all_solutions(input_dir='input', output_dir=os.path.join('output', 'v1')):
+def validate_all_solutions(input_dir='input', output_dir=os.path.join('output', 'v5')):
     print("\n=== Validating All Solutions ===")
     
     # Get all input files
