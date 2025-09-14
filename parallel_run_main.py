@@ -8,6 +8,7 @@ from models import Solver
 INPUT_INSTANCES_DIR = 'input'
 OUTPUT_INSTANCES_DIR = 'output'
 
+MAX_ITERATIONS = 100000000
 MINUTES_TO_RUN = 10
 NUM_CORES = 55
 
